@@ -14,7 +14,7 @@ import (
 )
 
 type Flags struct {
-	Endianess bool
+	Endian    bool
 	GroupSize string
 	Length    string
 	Columns   string
@@ -32,16 +32,21 @@ type ParsedFlags struct {
 }
 
 type IsSetFlags struct {
-	IsSetC bool
-	IsSetL bool
 	IsSetG bool
+	IsSetL bool
+	IsSetC bool
 	IsSetS bool
+}
+
+type Result struct {
+	Offset int
+	Chunk  string
 }
 
 func NewFlags() (*Flags, *IsSetFlags, []string) {
 	flags := new(Flags)
 	setFlags := &IsSetFlags{}
-	flag.BoolVarP(&flags.Endianess, "little-endian", "e", false, "little-endian")
+	flag.BoolVarP(&flags.Endian, "little-endian", "e", false, "little-endian")
 	flag.StringVarP(&flags.GroupSize, "group-size", "g", "2", "group-size")
 	flag.StringVarP(&flags.Length, "length", "l", "-1", "length")
 	flag.StringVarP(&flags.Columns, "cols", "c", "16", "columns")
@@ -74,9 +79,9 @@ func NumberParse(input string) (res int64, err error) {
 	}
 	return 0, nil
 }
-func inputParse(s []byte, offset int, f *ParsedFlags, length int) {
+func inputParse(s []byte, offset int, f *ParsedFlags, length int) string {
 	buffer := byteToHex(s, f.C)
-	dumpHex(offset, length, f, buffer, s)
+	return dumpHex(offset, length, f, buffer, s)
 }
 
 func reverseString(input string) string {
@@ -110,14 +115,14 @@ func bytesToString(input []byte) string {
 	}
 	return string(output)
 }
-func dumpHex(offset, length int, f *ParsedFlags, stringBuffer string, buffer []byte) {
+func dumpHex(offset, length int, f *ParsedFlags, stringBuffer string, buffer []byte) (resultString string) {
 	i, rowCount, groupCount := 0, 0, 0
 	var groupBuffer string
 	for i < length*2 {
 		if !f.IsFile {
-			fmt.Printf("%08x: ", (offset*f.C + f.C*rowCount + f.S))
+			resultString += fmt.Sprintf("%08x: ", (offset*f.C + f.C*rowCount + f.S))
 		} else {
-			fmt.Printf("%08x: ", (offset*size(f.C) + f.C*rowCount + f.S))
+			resultString += fmt.Sprintf("%08x: ", (offset*size(f.C) + f.C*rowCount + f.S))
 		}
 		groupCount = 1
 
@@ -130,7 +135,7 @@ func dumpHex(offset, length int, f *ParsedFlags, stringBuffer string, buffer []b
 			if f.E {
 				groupBuffer = reverseString(groupBuffer)
 			}
-			fmt.Printf("%s ", groupBuffer)
+			resultString += fmt.Sprintf("%s ", groupBuffer)
 			groupCount += 1
 
 		}
@@ -140,113 +145,82 @@ func dumpHex(offset, length int, f *ParsedFlags, stringBuffer string, buffer []b
 		} else {
 			originalBuffer = bytesToString(buffer[(f.C * rowCount):(f.C * (rowCount + 1))])
 		}
-		fmt.Printf(" %v\n", originalBuffer)
+		resultString += fmt.Sprintf(" %v\n", originalBuffer)
 		i += f.C * 2
 		rowCount += 1
 	}
+	return resultString
 }
 
-// func parseL() {}
-// func parseG() {}
-// func parseC() {}
-// func parseS() {}
-
-func CheckFlags(isFile bool, f *Flags, size int, setFlags *IsSetFlags) (flag *ParsedFlags) {
-	flag = &ParsedFlags{}
+func checkFlags(isFile bool, f *Flags, size int, setFlags *IsSetFlags) (*ParsedFlags, int) {
+	flag := &ParsedFlags{}
 	flag.R = f.Revert
-	flag.E = f.Endianess
+	flag.E = f.Endian
 	flag.IsFile = isFile
 
 	var res int64
 	var err error
+	flag.L = size
 	if setFlags.IsSetL {
 		if res, err = NumberParse(f.Length); err != nil || res == 0 {
-			os.Exit(1)
-		} else if res < 0 {
+			return flag, 1
+		}
+		flag.L = int(res)
+		if res < 0 || (flag.L > size && isFile) {
 			flag.L = size
-		} else if int(res) > size {
-			if isFile {
-				flag.L = size
-			} else {
-				flag.L = int(res)
-			}
-		} else {
-			flag.L = int(res)
 		}
-	} else {
-		flag.L = size
 	}
-
-	if setFlags.IsSetG && f.Endianess {
-		if res, err = NumberParse(f.GroupSize); err != nil {
+	if setFlags.IsSetG {
+		if res, err = NumberParse(f.GroupSize); err != nil || res == 0 {
 			flag.G = 16
 		} else if res < 0 {
-			flag.G = 4
-		} else if res > 0 {
-			if res&(res-1) == 0 {
-				flag.G = int(res)
+			if f.Endian {
+				flag.G = 4
 			} else {
-				fmt.Println("sdxxd: number of octets per group must be a power of 2 with -e.")
-				os.Exit(1)
+				flag.G = 2
 			}
-		} else {
-			flag.G = 16
-		}
-	} else if setFlags.IsSetG {
-		if res, err = NumberParse(f.GroupSize); err != nil {
-			flag.G = 16
-		} else if res < 0 {
-			flag.G = 2
 		} else if res > 0 {
 			flag.G = int(res)
-		} else {
-			flag.G = 16
+			if f.Endian && res&(res-1) != 0 {
+				fmt.Println("sdxxd: number of octets per group must be a power of 2 with -e.")
+				return flag, 1
+			}
 		}
-	} else if f.Endianess {
+	} else if f.Endian {
 		flag.G = 4
 	} else {
 		flag.G = 2
 	}
+
+	flag.C = 16
 	if setFlags.IsSetC {
 		if res, err := NumberParse(f.Columns); err != nil {
-			flag.C = 16
+			return flag, 1
 		} else {
 			flag.C = int(res)
 		}
-	} else {
-		flag.C = 16
 	}
 	if setFlags.IsSetS {
 		if f.Seek == "-0" && !isFile {
 			fmt.Fprintln(os.Stderr, "sdxxd: Sorry, cannnot seek.")
+			return flag, 4
 		} else if f.Seek == "-0" && isFile {
 			flag.S = size
-		} else if res, err := NumberParse(f.Seek); err != nil {
-			flag.S = 0
-		} else {
+		} else if res, err := NumberParse(f.Seek); err == nil {
+			flag.S = int(res)
 			if res < 0 {
 				flag.S = size + int(res)
-			} else {
-				flag.S = int(res)
 			}
 		}
-	} else {
-		flag.S = 0
 	}
-	return flag
+	return flag, 0
 }
 func size(cols int) int {
-	i := 1
-	bytes := i * cols
-	if bytes > 2048 {
-		return bytes
+	div := 2048 / cols
+	if 2048%cols != 0 {
+		return (div + 1) * cols
 	}
-	// Adjust bytesToRead within the desired range
-	for bytes < 2048 {
-		i += 1
-		bytes = i * cols
-	}
-	return bytes
+	return div * cols
 }
 func trimWords(s string) string {
 	words := strings.Fields(s)
@@ -259,7 +233,6 @@ func revert(input any) error {
 	switch v := input.(type) {
 	case *os.File:
 		scanner := bufio.NewScanner(v)
-		// Read line by line
 		for {
 			for scanner.Scan() {
 				field := trimWords(strings.TrimSpace(strings.Split(strings.Split(scanner.Text(), ":")[1], "  ")[0]))
@@ -271,7 +244,7 @@ func revert(input any) error {
 			//fmt.Println(str)
 			decodedString, err := hex.DecodeString(str)
 			if err != nil {
-				return errors.New("2")
+				return errors.New("error while decoding")
 			}
 			os.Stdout.Write(decodedString)
 			if len(str) < 4096 {
@@ -292,54 +265,53 @@ func revert(input any) error {
 		}
 		decodedString, err := hex.DecodeString(str)
 		if err != nil {
-			return errors.New("2")
+			return errors.New("error while decoding")
 		}
 		os.Stdout.Write(decodedString)
 	}
 	return nil
 }
-func processStdIn(f *Flags, setFlags *IsSetFlags) {
-	offset := 0
+func processStdIn(f *Flags, setFlags *IsSetFlags) int {
+	offset, status := 0, 0
 	var flags *ParsedFlags
+	scanner := bufio.NewScanner(os.Stdin)
 	if f.Revert {
-		//fmt.Println(s)
-		scanner := bufio.NewScanner(os.Stdin)
-		revert(scanner)
-		os.Exit(0)
+		//fmt.Println("Starting revert")
+		err := revert(scanner)
+		if err != nil {
+			return 1
+		}
+		return 0
 	}
-	reader := bufio.NewReader(os.Stdin)
+	var i = 0
 	var input string
 	var status1, status2 bool = false, false
-	for i := 0; ; i++ {
-		s, _ := reader.ReadString('\n')
+	var ch chan int
+	scanner.Split(bufio.ScanLines)
+
+	for scanner.Scan() {
+		s := scanner.Text()
 		input = input + s
-		if !setFlags.IsSetL {
-			flags = CheckFlags(false, f, len(input), setFlags)
-		} else if i == 0 {
-			flags = CheckFlags(false, f, len(input), setFlags)
+		if !setFlags.IsSetL || i == 0 {
+			flags, status = checkFlags(false, f, len(input), setFlags)
+			if status != 0 {
+				close(ch)
+				return status
+			}
 		}
-		if len(input)-flags.S < flags.C && len(input)-flags.S < flags.L {
+		l1 := len(input) - flags.S
+		if l1 < flags.C && l1 < flags.L {
 			continue
 		} else {
-			if len(input)-flags.S >= flags.C {
-				status1 = true
-			}
-			if len(input)-flags.S > flags.L {
-				status2 = true
-			}
-			if len(input)-flags.S == flags.L {
-				if setFlags.IsSetL {
-					status2 = true
-				} else {
-					status2 = false
-				}
-			}
+			status1 = l1 >= flags.C
+			status2 = l1 > flags.L || l1 == flags.L && setFlags.IsSetL
 		}
-		if status1 && status2 {
+		if (status1 && status2) || !status1 {
 			inputParse([]byte(input[flags.S:flags.L+flags.S]), offset, flags, flags.L)
-			break
-
-		} else if status1 {
+			close(ch)
+			return 0
+		}
+		if status1 {
 			for {
 				inputParse([]byte(input[flags.S:flags.C+flags.S]), offset, flags, flags.C)
 				input = input[flags.C:]
@@ -350,30 +322,41 @@ func processStdIn(f *Flags, setFlags *IsSetFlags) {
 				}
 			}
 			status1, status2 = false, false
-		} else {
-			inputParse([]byte(input[flags.S:flags.L+flags.S]), offset, flags, flags.L)
-			break
 		}
+		i += 1
 	}
+
+	for i := 0; i < offset; i++ {
+		<-ch
+	}
+	close(ch)
+	return 0
 }
-func processFile(fileName string, f *Flags, setFlags *IsSetFlags) {
-	var flags *ParsedFlags
+func processFile(fileName string, f *Flags, setFlags *IsSetFlags) int {
 	var length int = 0
 	file, err := os.Open(fileName)
-	if f.Revert {
-		revert(file)
-		os.Exit(0)
-	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "sdxxd: %v: No such file or directory\n", fileName)
-		os.Exit(1)
+		return 2
 	}
-	fileStat, _ := file.Stat()
+	if f.Revert {
+		//fmt.Println("Starting revert")
+		err := revert(file)
+		if err != nil {
+			return 2
+		}
+		return 0
+	}
+	fileStat, err := file.Stat()
+	if err != nil {
+		return 2
+	}
 	fileSize := fileStat.Size()
-
-	flags = CheckFlags(true, f, int(fileSize), setFlags)
+	flags, status := checkFlags(true, f, int(fileSize), setFlags)
+	if status != 0 {
+		return status
+	}
 	defer file.Close()
-
 	buffer := make([]byte, size(flags.C))
 	offset := 0
 	file.Seek(int64(flags.S), 0)
@@ -388,18 +371,18 @@ func processFile(fileName string, f *Flags, setFlags *IsSetFlags) {
 			length = n
 			flags.L = flags.L - n
 		}
-		inputParse(buffer[:length], offset, flags, length)
+		fmt.Print(inputParse(buffer[:length], offset, flags, length))
 		if length < size(flags.C) {
 			break
 		}
 		offset += 1
 	}
+	return 0
 }
-func Driver() {
+func Driver() int {
 	f, setFlags, args := NewFlags()
 	if len(args) == 0 {
-		processStdIn(f, setFlags)
-	} else {
-		processFile(args[0], f, setFlags)
+		return processStdIn(f, setFlags)
 	}
+	return processFile(args[0], f, setFlags)
 }
