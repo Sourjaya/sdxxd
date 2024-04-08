@@ -66,13 +66,16 @@ type IsSetFlags struct {
 func NewFlags() (*Flags, *IsSetFlags, []string) {
 	flags := new(Flags)
 	setFlags := &IsSetFlags{}
+	// define the flags with their default values
 	flag.BoolVarP(&flags.Endian, "little-endian", "e", false, "little-endian")
 	flag.StringVarP(&flags.GroupSize, "group-size", "g", "2", "group-size")
 	flag.StringVarP(&flags.Length, "length", "l", "-1", "length")
 	flag.StringVarP(&flags.Columns, "cols", "c", "16", "columns")
 	flag.StringVarP(&flags.Seek, "seek", "s", "0", "seek")
 	flag.BoolVarP(&flags.Revert, "revert", "r", false, "revert")
+	// parse the flags
 	flag.Parse()
+	// visit the flags in lexographical order and check if flags be visited or not
 	flag.Visit(func(f *flag.Flag) {
 		if f.Shorthand == "c" {
 			setFlags.IsSetC = true
@@ -88,6 +91,7 @@ func NewFlags() (*Flags, *IsSetFlags, []string) {
 		}
 	})
 	args := flag.Args()
+	// return the flag values along with the setFlags status and the arguments list
 	return flags, setFlags, args
 }
 
@@ -259,7 +263,7 @@ func checkFlags(isFile bool, f *Flags, size int, setFlags *IsSetFlags) (*ParsedF
 	}
 	// check for s flag validity and set correct value of s parameter
 	if setFlags.IsSetS {
-		if f.Seek == "-0" && !isFile || f.Seek[:2] == "+-" {
+		if f.Seek == "-0" && !isFile || (len(f.Seek) > 1 && f.Seek[:2] == "+-") {
 			fmt.Fprintln(os.Stderr, "sdxxd: Sorry, cannnot seek.")
 			return flag, 4
 		} else if f.Seek == "-0" && isFile {
@@ -292,6 +296,9 @@ func trimWords(s string) string {
 
 // Function to convert (or patch) hexdump into binary.
 func revert(input any) error {
+	defer func() {
+		recover()
+	}()
 	var str string
 	// switch case for two types of inputs: file and standard input.
 	switch v := input.(type) {
@@ -350,7 +357,7 @@ func processStdIn(f *Flags, setFlags *IsSetFlags) int {
 		}
 		return 0
 	}
-	if setFlags.IsSetS && (f.Seek[:2] == "+-" || f.Seek[:1] == "-") {
+	if setFlags.IsSetS && ((len(f.Seek) > 1 && f.Seek[:2] == "+-") || f.Seek[:1] == "-") {
 		fmt.Fprintln(os.Stderr, "sdxxd: Sorry, cannnot seek.")
 		return 4
 	}
