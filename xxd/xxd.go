@@ -368,7 +368,7 @@ func processStdIn(f *Flags, setFlags *IsSetFlags) int {
 		}
 		l1 := len(input) - flags.S
 		// checking for different edge cases
-		if l1 < flags.C && l1 < flags.L {
+		if l1 < flags.C && ((l1 <= flags.L && !setFlags.IsSetL) || l1 < flags.L) {
 			continue
 		} else {
 			status1 = l1 >= flags.C
