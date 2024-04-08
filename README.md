@@ -31,7 +31,13 @@ func main() {
 	}
 }
 ```
-
+If you want to test it out in the terminal, first build the go binary using `go build`, and then use the binary file just like any other command.
+```bash
+# ./sdxxd <filename>
+# ./sdxxd <filepath>
+# ./sdxxd -help
+./sdxxd file.txt
+```
 ---
 
 # Command Line Flags
