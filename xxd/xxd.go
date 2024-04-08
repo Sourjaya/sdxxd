@@ -259,7 +259,7 @@ func checkFlags(isFile bool, f *Flags, size int, setFlags *IsSetFlags) (*ParsedF
 	}
 	// check for s flag validity and set correct value of s parameter
 	if setFlags.IsSetS {
-		if f.Seek == "-0" && !isFile {
+		if f.Seek == "-0" && !isFile || f.Seek[:2] == "+-" {
 			fmt.Fprintln(os.Stderr, "sdxxd: Sorry, cannnot seek.")
 			return flag, 4
 		} else if f.Seek == "-0" && isFile {
@@ -349,6 +349,10 @@ func processStdIn(f *Flags, setFlags *IsSetFlags) int {
 			return 1
 		}
 		return 0
+	}
+	if setFlags.IsSetS && (f.Seek[:2] == "+-" || f.Seek[:1] == "-") {
+		fmt.Fprintln(os.Stderr, "sdxxd: Sorry, cannnot seek.")
+		return 4
 	}
 	// if r flag is not set, read from standard input and show the hex dump. The program will continue until interrupt.
 	var i = 0
@@ -453,7 +457,7 @@ func processFile(fileName string, f *Flags, setFlags *IsSetFlags) int {
 func Driver() int {
 	f, setFlags, args := NewFlags()
 	// if no file name is provided read from standard input
-	if len(args) == 0 {
+	if len(args) == 0 || args[0] == "-" {
 		return processStdIn(f, setFlags)
 	}
 	return processFile(args[0], f, setFlags)
