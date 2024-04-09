@@ -55,7 +55,7 @@ The xxd package supports the following command-line flags:
 
 ---
 
-# API Reference
+# Code Reference
 - #### `func Driver() int`
 This function is the entry point for utilizing the functionalities provided by the xxd package. It parses command-line flags and processes input from either standard input or files.
 
@@ -92,13 +92,7 @@ This function generates a hexadecimal dump output string.
 ---
 
 # TODO
-Enable parallel read and processing of bytes.
-
----
-
-# LICENSE
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
+Enable parallel read and processing of bytes. Add other flag functionalities.
 
 
 
