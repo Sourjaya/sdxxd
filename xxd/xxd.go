@@ -119,11 +119,11 @@ func numberParse(input string) (res int64, err error) {
 }
 
 // Function to parse the input stream of bytes.
-func InputParse(s []byte, offset int, f *ParsedFlags, length int) string {
+func (flags *ParsedFlags) InputParse(s []byte, offset int, length int) string {
 	// convert byte slice to hex string
-	buffer := byteToHex(s, f.C)
+	buffer := byteToHex(s, flags.C)
 	// function to generate hex dump output string
-	return dumpHex(offset, length, f, buffer, s)
+	return flags.dumpHex(offset, length, buffer, s)
 }
 
 // Function to reverse a string
@@ -182,29 +182,29 @@ func bytesToString(input []byte) string {
 // stringBuffer: The hex string buffer.
 // buffer: The byte buffer.
 // Returns the hexadecimal dump output string.
-func dumpHex(offset, length int, f *ParsedFlags, stringBuffer string, buffer []byte) (resultString string) {
+func (flags *ParsedFlags) dumpHex(offset, length int, stringBuffer string, buffer []byte) (resultString string) {
 	i, rowCount, groupCount := 0, 0, 0
 
 	var groupBuffer string
 
 	for i < length*2 {
 		// print the 8 byte offset
-		if !f.IsFile {
-			resultString += fmt.Sprintf("%08x: ", (offset*f.C + f.C*rowCount + f.S))
+		if !flags.IsFile {
+			resultString += fmt.Sprintf("%08x: ", (offset*flags.C + flags.C*rowCount + flags.S))
 		} else {
-			resultString += fmt.Sprintf("%08x: ", (offset*size(f.C) + f.C*rowCount + f.S))
+			resultString += fmt.Sprintf("%08x: ", (offset*size(flags.C) + flags.C*rowCount + flags.S))
 		}
 
 		groupCount = 1
 		// print the grouped hex bytes for each line
-		for j := 0; j < f.C*2; j += f.G * 2 {
-			if groupCount*f.G*2 > f.C*2 {
-				groupBuffer = stringBuffer[i+j : i+(f.C*2)]
+		for j := 0; j < flags.C*2; j += flags.G * 2 {
+			if groupCount*flags.G*2 > flags.C*2 {
+				groupBuffer = stringBuffer[i+j : i+(flags.C*2)]
 			} else {
-				groupBuffer = stringBuffer[i+j : i+(groupCount*f.G*2)]
+				groupBuffer = stringBuffer[i+j : i+(groupCount*flags.G*2)]
 			}
 			// reverse the string if e flag is provided
-			if f.E {
+			if flags.E {
 				groupBuffer = reverseString(groupBuffer)
 			}
 
@@ -214,14 +214,14 @@ func dumpHex(offset, length int, f *ParsedFlags, stringBuffer string, buffer []b
 
 		var originalBuffer string
 		// print the original character bytes for the line
-		if (f.C * (rowCount + 1)) > len(buffer) {
-			originalBuffer = bytesToString(buffer[(f.C * rowCount):])
+		if (flags.C * (rowCount + 1)) > len(buffer) {
+			originalBuffer = bytesToString(buffer[(flags.C * rowCount):])
 		} else {
-			originalBuffer = bytesToString(buffer[(f.C * rowCount):(f.C * (rowCount + 1))])
+			originalBuffer = bytesToString(buffer[(flags.C * rowCount):(flags.C * (rowCount + 1))])
 		}
 
 		resultString += fmt.Sprintf(" %v\n", originalBuffer)
-		i += f.C * 2
+		i += flags.C * 2
 		rowCount += 1
 	}
 
@@ -229,7 +229,7 @@ func dumpHex(offset, length int, f *ParsedFlags, stringBuffer string, buffer []b
 }
 
 // Function to check for validity of flag values entered.
-func checkFlags(isFile bool, f *Flags, size int, setFlags *IsSetFlags) (*ParsedFlags, int) {
+func (f *Flags) checkFlags(isFile bool, size int, setFlags *IsSetFlags) (*ParsedFlags, int) {
 	flags := &ParsedFlags{}
 	flags.R = f.Revert
 	flags.E = f.Endian
@@ -380,7 +380,7 @@ func revert(input any) error {
 }
 
 // Function to convert input from standard input to hex dump
-func processStdIn(f *Flags, setFlags *IsSetFlags) int {
+func (f *Flags) processStdIn(setFlags *IsSetFlags) int {
 	var flags *ParsedFlags
 
 	offset, status := 0, 0
@@ -413,7 +413,7 @@ func processStdIn(f *Flags, setFlags *IsSetFlags) int {
 		input += s
 		// check for flag validity and set proper values
 		if !setFlags.IsSetL || i == 0 {
-			flags, status = checkFlags(false, f, len(input), setFlags)
+			flags, status = f.checkFlags(false, len(input), setFlags)
 			if status != 0 {
 				return status
 			}
@@ -428,13 +428,13 @@ func processStdIn(f *Flags, setFlags *IsSetFlags) int {
 		status2 = l1 > flags.L || l1 == flags.L && setFlags.IsSetL
 
 		if (status1 && status2) || !status1 {
-			fmt.Print(InputParse([]byte(input[flags.S:flags.L+flags.S]), offset, flags, flags.L))
+			fmt.Print(flags.InputParse([]byte(input[flags.S:flags.L+flags.S]), offset, flags.L))
 			return 0
 		}
 
 		if status1 {
 			for {
-				fmt.Print(InputParse([]byte(input[flags.S:flags.C+flags.S]), offset, flags, flags.C))
+				fmt.Print(flags.InputParse([]byte(input[flags.S:flags.C+flags.S]), offset, flags.C))
 				input = input[flags.C:]
 				flags.L -= flags.C
 				offset += 1
@@ -452,7 +452,7 @@ func processStdIn(f *Flags, setFlags *IsSetFlags) int {
 }
 
 // Function to convert input from file to hex dump
-func processFile(fileName string, f *Flags, setFlags *IsSetFlags) int {
+func (f *Flags) processFile(fileName string, setFlags *IsSetFlags) int {
 	length := 0
 	file, err := os.Open(fileName)
 	// check if file is present or not
@@ -477,7 +477,7 @@ func processFile(fileName string, f *Flags, setFlags *IsSetFlags) int {
 
 	fileSize := fileStat.Size()
 	// check for flag validity and set proper values
-	flags, status := checkFlags(true, f, int(fileSize), setFlags)
+	flags, status := f.checkFlags(true, int(fileSize), setFlags)
 	if status != 0 {
 		return status
 	}
@@ -505,7 +505,7 @@ func processFile(fileName string, f *Flags, setFlags *IsSetFlags) int {
 			flags.L -= n
 		}
 		// parsing input
-		fmt.Print(InputParse(buffer[:length], offset, flags, length))
+		fmt.Print(flags.InputParse(buffer[:length], offset, length))
 
 		if length < size(flags.C) {
 			break
@@ -521,8 +521,8 @@ func Driver() int {
 	f, setFlags, args := NewFlags()
 	// if no file name is provided read from standard input
 	if len(args) == 0 || args[0] == "-" {
-		return processStdIn(f, setFlags)
+		return f.processStdIn(setFlags)
 	}
 
-	return processFile(args[0], f, setFlags)
+	return f.processFile(args[0], setFlags)
 }
