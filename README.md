@@ -65,19 +65,19 @@ This function initializes and parses command-line flags.
 - #### `func numberParse(input string) (int64, error)`
 This function parses numbers from strings using regular expressions.
 
-- #### `func InputParse(s []byte, offset int, f *ParsedFlags, length int) string`
+- #### `func (flags *ParsedFlags) InputParse(s []byte, offset int, length int) string`
 This function parses the input stream of bytes and generates a hexadecimal dump output string.
 
-- #### `func checkFlags(isFile bool, f *Flags, size int, setFlags *IsSetFlags) (*ParsedFlags, int)`
+- #### `func (f *Flags) checkFlags(isFile bool, size int, setFlags *IsSetFlags) (*ParsedFlags, int)`
 This function checks the validity of flag values entered.
 
 - #### `func revert(input any) error`
 This function converts (or patches) a hex dump into binary.
 
-- #### `func processStdIn(f *Flags, setFlags *IsSetFlags) int`
+- #### `func (f *Flags) processStdIn(setFlags *IsSetFlags) int `
 This function processes input from standard input and converts it to a hex dump.
 
-- #### `func processFile(fileName string, f *Flags, setFlags *IsSetFlags) int`
+- #### `func (f *Flags) processFile(fileName string, setFlags *IsSetFlags) int`
 This function processes input from a file and converts it to a hex dump.
 
 - #### `func reverseString(input string) string`
@@ -86,7 +86,7 @@ This function is used to reverse a string
 This function is used to convert a byte slice to a hex string with specified grouping.
 - #### `func bytesToString(input []byte) string`
 This function converts ASCII byte slice to its equivalent character string
-- #### `func dumpHex(offset, length int, f *ParsedFlags, stringBuffer string, buffer []byte) (resultString string)`
+- #### `func (flags *ParsedFlags) dumpHex(offset, length int, stringBuffer string, buffer []byte) (resultString string)`
 This function generates a hexadecimal dump output string.
 
 ---
